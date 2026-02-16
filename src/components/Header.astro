@@ -1,0 +1,27 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+import { NAV_LINKS, SITE } from '@/consts';
+
+const current = Astro.url.pathname;
+---
+
+<header class="border-b border-border">
+  <div class="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+    <a href="/" class="text-lg font-semibold tracking-tightish text-ink">
+      {SITE.displayName}
+    </a>
+    <nav class="flex flex-wrap items-center gap-4 text-sm text-muted">
+      {NAV_LINKS.map((link) => (
+        <a
+          href={link.href}
+          class={`transition ${
+            current === link.href ? 'text-ink' : 'hover:text-ink'
+          }`}
+        >
+          {link.label}
+        </a>
+      ))}
+      <ThemeToggle />
+    </nav>
+  </div>
+</header>

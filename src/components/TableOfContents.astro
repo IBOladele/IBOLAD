@@ -1,0 +1,19 @@
+---
+const { headings } = Astro.props;
+const items = (headings ?? []).filter((heading) => heading.depth <= 3);
+---
+
+{items.length ? (
+  <aside class="surface-card">
+    <p class="text-xs uppercase tracking-[0.2em] text-muted">On this page</p>
+    <ol class="mt-4 space-y-2 text-sm text-muted">
+      {items.map((heading) => (
+        <li class={heading.depth === 3 ? 'ml-4' : ''}>
+          <a href={`#${heading.slug}`} class="hover:text-ink">
+            {heading.text}
+          </a>
+        </li>
+      ))}
+    </ol>
+  </aside>
+) : null}

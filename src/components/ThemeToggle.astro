@@ -1,0 +1,32 @@
+<button class="theme-toggle" type="button" data-theme-toggle>
+  <span class="sr-only">Toggle theme</span>
+  <span aria-hidden="true" class="text-[0.65rem] uppercase tracking-[0.2em]">Theme</span>
+  <span class="text-xs" data-theme-label>Light</span>
+</button>
+
+<script is:inline>
+  const buttons = document.querySelectorAll('[data-theme-toggle]');
+  const getStoredTheme = () => localStorage.getItem('theme');
+  const getPreferredTheme = () =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+  const resolveTheme = () => getStoredTheme() || getPreferredTheme();
+
+  const setTheme = (theme) => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('theme', theme);
+    buttons.forEach((button) => {
+      const label = button.querySelector('[data-theme-label]');
+      if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
+    });
+  };
+
+  setTheme(resolveTheme());
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const next = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+      setTheme(next);
+    });
+  });
+</script>

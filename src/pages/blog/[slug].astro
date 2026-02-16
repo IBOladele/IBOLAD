@@ -1,0 +1,64 @@
+---
+import Layout from '@/components/Layout.astro';
+import PostMeta from '@/components/PostMeta.astro';
+import TableOfContents from '@/components/TableOfContents.astro';
+import { getCollection } from 'astro:content';
+import { getReadingMinutes, sortPosts } from '@/utils/content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post }
+  }));
+}
+
+const { post } = Astro.props;
+const allPosts = sortPosts(await getCollection('blog', ({ data }) => !data.draft));
+const currentIndex = allPosts.findIndex((entry) => entry.slug === post.slug);
+const previousPost = allPosts[currentIndex + 1];
+const nextPost = allPosts[currentIndex - 1];
+
+const { Content, headings } = await post.render();
+const readingMinutes = getReadingMinutes(post.body);
+---
+
+<Layout title={post.data.title} description={post.data.description} ogType="article">
+  <section class="mx-auto w-full max-w-5xl px-6 py-14">
+    <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_240px]">
+      <article class="prose">
+        <PostMeta
+          date={post.data.pubDate}
+          updatedDate={post.data.updatedDate}
+          readingMinutes={readingMinutes}
+          pillar={post.data.pillar}
+        />
+        <h1 class="mt-6">{post.data.title}</h1>
+        <p class="text-lg text-muted">{post.data.description}</p>
+        <Content />
+      </article>
+      <div class="lg:sticky lg:top-24 self-start">
+        <TableOfContents headings={headings} />
+      </div>
+    </div>
+
+    <nav class="mt-12 border-t border-border pt-6">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {previousPost ? (
+          <a class="text-sm text-muted hover:text-ink" href={`/blog/${previousPost.slug}`}>
+            Previous: {previousPost.data.title}
+          </a>
+        ) : (
+          <span class="text-sm text-muted"> </span>
+        )}
+        {nextPost ? (
+          <a class="text-sm text-muted hover:text-ink" href={`/blog/${nextPost.slug}`}>
+            Next: {nextPost.data.title}
+          </a>
+        ) : (
+          <span class="text-sm text-muted"> </span>
+        )}
+      </div>
+    </nav>
+  </section>
+</Layout>

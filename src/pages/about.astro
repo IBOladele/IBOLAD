@@ -1,0 +1,65 @@
+---
+import Layout from '@/components/Layout.astro';
+
+const title = 'About';
+---
+
+<Layout title={title} description="How I think about systems, incentives, and trust.">
+  <section class="mx-auto w-full max-w-4xl px-6 py-14">
+    <div class="flex flex-col gap-10">
+      <div class="space-y-4">
+        <p class="text-xs uppercase tracking-[0.3em] text-muted">Personal philosophy</p>
+        <h1 class="text-3xl font-semibold tracking-tightish">How I think</h1>
+        <p class="text-base text-muted">
+          I care about systems that survive contact with reality. That means
+          understanding incentives, naming constraints, and examining second-order
+          effects before they surface as incidents.
+        </p>
+      </div>
+
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="surface-card space-y-3">
+          <h2 class="text-lg font-semibold">Systems and incentives</h2>
+          <p class="text-sm text-muted">
+            I start with incentives because they predict behavior more reliably
+            than mission statements. When incentives are misaligned, everything
+            else becomes theater.
+          </p>
+        </div>
+        <div class="surface-card space-y-3">
+          <h2 class="text-lg font-semibold">Trust and continuity</h2>
+          <p class="text-sm text-muted">
+            Trust is a direction, not a score. Continuity is the proof. I look
+            for the moments when a system is stressed and ask whether it still
+            keeps its promises.
+          </p>
+        </div>
+        <div class="surface-card space-y-3">
+          <h2 class="text-lg font-semibold">Constraints and clarity</h2>
+          <p class="text-sm text-muted">
+            Constraints reveal the shape of a product. When they are explicit,
+            priorities become legible. When they are hidden, the system grows
+            brittle.
+          </p>
+        </div>
+        <div class="surface-card space-y-3">
+          <h2 class="text-lg font-semibold">Second-order effects</h2>
+          <p class="text-sm text-muted">
+            Every decision casts a shadow. I study how people adapt, route around
+            controls, and optimize for metrics that no longer mean what we think
+            they do.
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <a
+          class="rounded-full border border-border px-4 py-2 text-sm text-muted hover:text-ink"
+          href="/principles"
+        >
+          Read my principles
+        </a>
+      </div>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,60 @@
+---
+import Layout from '@/components/Layout.astro';
+import PostCard from '@/components/PostCard.astro';
+import { getCollection } from 'astro:content';
+import { SITE } from '@/consts';
+import { getReadingMinutes, sortPosts } from '@/utils/content';
+
+const posts = sortPosts(
+  await getCollection('blog', ({ data }) => {
+    return !data.draft;
+  })
+).slice(0, 3);
+---
+
+<Layout description={SITE.description}>
+  <section class="mx-auto w-full max-w-5xl px-6 py-14">
+    <div class="flex flex-col gap-6">
+      <p class="text-xs uppercase tracking-[0.3em] text-muted">Operator's notebook</p>
+      <div class="space-y-3">
+        <h1 class="text-4xl font-semibold tracking-tightish text-ink sm:text-5xl">
+          {SITE.displayName}
+        </h1>
+        <p class="text-lg text-muted">
+          First principles, systems thinking, and the work of earning trust.
+        </p>
+      </div>
+      <p class="max-w-2xl text-base text-muted">
+        I write to pressure-test ideas against real constraints. Every note is a
+        small attempt to make systems more legible: incentives, continuity,
+        second-order effects, and what stays true when the context shifts.
+      </p>
+      <div class="flex flex-wrap gap-3 text-sm">
+        <a class="rounded-full border border-border px-4 py-2 text-muted hover:text-ink" href="/about">
+          About
+        </a>
+        <a class="rounded-full border border-border px-4 py-2 text-muted hover:text-ink" href="/blog">
+          Blog
+        </a>
+        <a
+          class="rounded-full border border-border px-4 py-2 text-muted hover:text-ink"
+          href="/principles"
+        >
+          Principles
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-5xl px-6 pb-16">
+    <div class="mb-6 flex items-end justify-between">
+      <h2 class="text-2xl font-semibold tracking-tightish">Latest writing</h2>
+      <a class="text-sm text-muted hover:text-ink" href="/blog">View all</a>
+    </div>
+    <div class="grid gap-6">
+      {posts.map((post) => (
+        <PostCard post={post} readingMinutes={getReadingMinutes(post.body)} />
+      ))}
+    </div>
+  </section>
+</Layout>
