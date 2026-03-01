@@ -6,15 +6,15 @@ export default function HomePage() {
     <main className="container landing">
       <section className="landing-hero card panel">
         <div className="landing-mark">F</div>
-        <p className="eyebrow">ForgePay Finance OS</p>
+        <p className="eyebrow">FinOps Finance Command</p>
         <h1>
-          Run every naira and pound
+          Own every naira and pound
           <br />
-          like a strike team.
+          before it moves.
         </h1>
         <p className="hero-copy">
-          One battlefield for spend control, approvals, payroll, and payment execution.
-          Built for organizations that move fast and hate financial chaos.
+          FinOps is your operations-grade control room for spend, approvals, payroll, invoices, and payouts.
+          Move fast without losing control.
         </p>
         <div className="hero-metrics">
           <span>Policy-Driven Approvals</span>
@@ -26,14 +26,14 @@ export default function HomePage() {
       <section className="entry-grid">
         <article className="card panel entry-card">
           <p className="entry-tag">For Organizations</p>
-          <h2>Start Your Control Tower</h2>
+          <h2>Launch Your Finance Control Tower</h2>
           <p className="muted">
-            Spin up your finance workspace, define approval policies, and onboard teams in minutes.
+            Create your FinOps workspace, configure approvals, and onboard departments in minutes.
           </p>
           <form className="form-grid">
             <label>
               Organization Name
-              <input placeholder="ForgePay Holdings Ltd" />
+              <input placeholder="FinOps Group Ltd" />
             </label>
             <label>
               Work Email
@@ -49,7 +49,7 @@ export default function HomePage() {
             </label>
           </form>
           <div className="button-row">
-            <button type="button" className="btn">Create Organization Workspace</button>
+            <button type="button" className="btn">Create FinOps Workspace</button>
           </div>
         </article>
 
@@ -57,7 +57,7 @@ export default function HomePage() {
           <p className="entry-tag">For Invited Employees</p>
           <h2>Claim Your Seat</h2>
           <p className="muted">
-            Got invited? Enter your invite details and get straight into your assigned finance role.
+            Accept your invite and jump directly into your assigned role with secure access.
           </p>
           <form className="form-grid">
             <label>
@@ -86,7 +86,7 @@ export default function HomePage() {
           <p className="entry-tag">For Existing Users</p>
           <h2>Login and Execute</h2>
           <p className="muted">
-            Back in the arena. Sign in to approve, pay, reconcile, and keep cash movement locked down.
+            Sign in to approve, pay, reconcile, and run mission-critical finance operations.
           </p>
           <form className="form-grid">
             <label>

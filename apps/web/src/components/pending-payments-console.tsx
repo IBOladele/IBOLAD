@@ -20,18 +20,37 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? '';
+const actorUserId = process.env.NEXT_PUBLIC_FINOPS_ACTOR_USER_ID ?? '';
+const missingRuntimeConfig: string[] = [];
+
+if (apiBaseUrl === '') {
+  missingRuntimeConfig.push('NEXT_PUBLIC_API_BASE_URL');
+}
+
+if (actorUserId === '') {
+  missingRuntimeConfig.push('NEXT_PUBLIC_FINOPS_ACTOR_USER_ID');
+}
+
+const runtimeConfigError =
+  missingRuntimeConfig.length === 0
+    ? ''
+    : `Missing environment variable(s): ${missingRuntimeConfig.join(', ')}.`;
+
 export function PendingPaymentsConsole() {
-  const defaultApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
-  const [apiBaseUrl, setApiBaseUrl] = useState(defaultApiBase);
-  const [userId, setUserId] = useState('66666666-6666-4666-8666-666666666666');
-  const [paymentReference, setPaymentReference] = useState('PAY-REF-20260301-001');
-  const [paidAt, setPaidAt] = useState('2026-03-01T12:00:00.000Z');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paidAt, setPaidAt] = useState(() => new Date().toISOString());
   const [selectedSpendItemId, setSelectedSpendItemId] = useState('');
   const [pendingItems, setPendingItems] = useState<PendingPaymentItem[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState('');
 
   async function loadPendingPayments() {
+    if (runtimeConfigError !== '') {
+      setMessage(runtimeConfigError);
+      return;
+    }
+
     setIsBusy(true);
     setMessage('');
     try {
@@ -41,11 +60,11 @@ export function PendingPaymentsConsole() {
       });
 
       const response = await fetch(
-        `${apiBaseUrl.replace(/\/$/, '')}/spend-items/pending-payment?${params.toString()}`,
+        `${apiBaseUrl}/spend-items/pending-payment?${params.toString()}`,
         {
           cache: 'no-store',
           headers: {
-            'x-user-id': userId,
+            'x-user-id': actorUserId,
           },
         },
       );
@@ -69,6 +88,11 @@ export function PendingPaymentsConsole() {
   }
 
   async function markSelectedPaid() {
+    if (runtimeConfigError !== '') {
+      setMessage(runtimeConfigError);
+      return;
+    }
+
     if (selectedSpendItemId.trim() === '') {
       setMessage('Select a spend item first.');
       return;
@@ -78,12 +102,12 @@ export function PendingPaymentsConsole() {
     setMessage('');
     try {
       const response = await fetch(
-        `${apiBaseUrl.replace(/\/$/, '')}/spend-items/${selectedSpendItemId}/mark-paid`,
+        `${apiBaseUrl}/spend-items/${selectedSpendItemId}/mark-paid`,
         {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            'x-user-id': userId,
+            'x-user-id': actorUserId,
           },
           body: JSON.stringify({
             payment_reference: paymentReference,
@@ -111,18 +135,11 @@ export function PendingPaymentsConsole() {
     <div className="dashboard-grid">
       <section className="card panel">
         <h2>Pending Payment Queue</h2>
-        <div className="form-grid">
-          <label>
-            API Base URL
-            <input value={apiBaseUrl} onChange={(event) => setApiBaseUrl(event.target.value)} />
-          </label>
-          <label>
-            User ID
-            <input value={userId} onChange={(event) => setUserId(event.target.value)} />
-          </label>
-        </div>
+        <p className="muted">
+          {runtimeConfigError !== '' ? runtimeConfigError : `Connected to API: ${apiBaseUrl}`}
+        </p>
         <div className="button-row">
-          <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={loadPendingPayments}>
+          <button type="button" className="btn btn-secondary" disabled={isBusy || runtimeConfigError !== ''} onClick={loadPendingPayments}>
             Refresh Pending
           </button>
         </div>
@@ -162,7 +179,7 @@ export function PendingPaymentsConsole() {
           </label>
         </div>
         <div className="button-row">
-          <button type="button" className="btn" disabled={isBusy || selectedSpendItemId === ''} onClick={markSelectedPaid}>
+          <button type="button" className="btn" disabled={isBusy || runtimeConfigError !== '' || selectedSpendItemId === ''} onClick={markSelectedPaid}>
             Mark Paid
           </button>
         </div>

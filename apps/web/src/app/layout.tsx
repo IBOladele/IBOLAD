@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Monorepo Web App',
-  description: 'Next.js frontend in a workspace monorepo',
+  title: 'FinOps',
+  description: 'FinOps platform for spend control, approvals, payroll, invoices, and payments',
 };
 
 type RootLayoutProps = {

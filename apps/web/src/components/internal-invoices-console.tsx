@@ -56,25 +56,38 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-export function InternalInvoicesConsole() {
-  const defaultApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
-  const [apiBaseUrl, setApiBaseUrl] = useState(defaultApiBase);
-  const [userId, setUserId] = useState('44444444-4444-4444-8444-444444444444');
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? '';
+const actorUserId = process.env.NEXT_PUBLIC_FINOPS_ACTOR_USER_ID ?? '';
+const missingRuntimeConfig: string[] = [];
 
-  const [fromDepartmentId, setFromDepartmentId] = useState('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-  const [toDepartmentId, setToDepartmentId] = useState('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
-  const [currencyId, setCurrencyId] = useState('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+if (apiBaseUrl === '') {
+  missingRuntimeConfig.push('NEXT_PUBLIC_API_BASE_URL');
+}
+
+if (actorUserId === '') {
+  missingRuntimeConfig.push('NEXT_PUBLIC_FINOPS_ACTOR_USER_ID');
+}
+
+const runtimeConfigError =
+  missingRuntimeConfig.length === 0
+    ? ''
+    : `Missing environment variable(s): ${missingRuntimeConfig.join(', ')}.`;
+
+export function InternalInvoicesConsole() {
+  const [fromDepartmentId, setFromDepartmentId] = useState('');
+  const [toDepartmentId, setToDepartmentId] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
   const [baseCurrencyId, setBaseCurrencyId] = useState('');
-  const [invoiceNumber, setInvoiceNumber] = useState('INT-NEW-001');
-  const [invoiceDate, setInvoiceDate] = useState('2026-03-01');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [lineItems, setLineItems] = useState<LineItemForm[]>([
-    { description: 'Shared infra allocation', quantity: '1', unit_amount_minor: '50000' },
+    { description: '', quantity: '1', unit_amount_minor: '0' },
   ]);
 
-  const [attachmentStorageKey, setAttachmentStorageKey] = useState('internal-invoices/supporting.pdf');
-  const [attachmentName, setAttachmentName] = useState('supporting.pdf');
+  const [attachmentStorageKey, setAttachmentStorageKey] = useState('');
+  const [attachmentName, setAttachmentName] = useState('');
   const [attachmentMime, setAttachmentMime] = useState('application/pdf');
-  const [attachmentSize, setAttachmentSize] = useState('1024');
+  const [attachmentSize, setAttachmentSize] = useState('0');
 
   const [statusFilter, setStatusFilter] = useState('');
   const [fromDeptFilter, setFromDeptFilter] = useState('');
@@ -98,6 +111,11 @@ export function InternalInvoicesConsole() {
   }, [lineItems]);
 
   async function listInternalInvoices() {
+    if (runtimeConfigError !== '') {
+      setMessage(runtimeConfigError);
+      return;
+    }
+
     setIsBusy(true);
     setMessage('');
     try {
@@ -112,7 +130,7 @@ export function InternalInvoicesConsole() {
         params.set('to_department_id', toDeptFilter.trim());
       }
 
-      const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/internal-invoices?${params.toString()}`, {
+      const response = await fetch(`${apiBaseUrl}/internal-invoices?${params.toString()}`, {
         cache: 'no-store',
       });
       const payload = (await response.json()) as { data?: InternalInvoiceListItem[]; error?: string };
@@ -130,10 +148,15 @@ export function InternalInvoicesConsole() {
   }
 
   async function loadDetail(invoiceId: string) {
+    if (runtimeConfigError !== '') {
+      setMessage(runtimeConfigError);
+      return;
+    }
+
     setIsBusy(true);
     setMessage('');
     try {
-      const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/internal-invoices/${invoiceId}`, {
+      const response = await fetch(`${apiBaseUrl}/internal-invoices/${invoiceId}`, {
         cache: 'no-store',
       });
       const payload = (await response.json()) as InternalInvoiceDetail & { error?: string };
@@ -152,14 +175,19 @@ export function InternalInvoicesConsole() {
   }
 
   async function createInternalInvoice() {
+    if (runtimeConfigError !== '') {
+      setMessage(runtimeConfigError);
+      return;
+    }
+
     setIsBusy(true);
     setMessage('');
     try {
-      const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/internal-invoices`, {
+      const response = await fetch(`${apiBaseUrl}/internal-invoices`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-user-id': userId,
+          'x-user-id': actorUserId,
         },
         body: JSON.stringify({
           from_department_id: fromDepartmentId,
@@ -204,6 +232,11 @@ export function InternalInvoicesConsole() {
   }
 
   async function submitInternalInvoice() {
+    if (runtimeConfigError !== '') {
+      setMessage(runtimeConfigError);
+      return;
+    }
+
     if (selectedId.trim() === '') {
       setMessage('Select an invoice first.');
       return;
@@ -213,12 +246,12 @@ export function InternalInvoicesConsole() {
     setMessage('');
     try {
       const response = await fetch(
-        `${apiBaseUrl.replace(/\/$/, '')}/internal-invoices/${selectedId}/submit`,
+        `${apiBaseUrl}/internal-invoices/${selectedId}/submit`,
         {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            'x-user-id': userId,
+            'x-user-id': actorUserId,
           },
           body: JSON.stringify({}),
         },
@@ -251,9 +284,10 @@ export function InternalInvoicesConsole() {
     <div className="dashboard-grid">
       <section className="card panel">
         <h2>Create Internal Invoice</h2>
+        <p className="muted">
+          {runtimeConfigError !== '' ? runtimeConfigError : `Connected to API: ${apiBaseUrl}`}
+        </p>
         <div className="form-grid">
-          <label>API Base URL<input value={apiBaseUrl} onChange={(event) => setApiBaseUrl(event.target.value)} /></label>
-          <label>User ID<input value={userId} onChange={(event) => setUserId(event.target.value)} /></label>
           <label>From Department<input value={fromDepartmentId} onChange={(event) => setFromDepartmentId(event.target.value)} /></label>
           <label>To Department<input value={toDepartmentId} onChange={(event) => setToDepartmentId(event.target.value)} /></label>
           <label>Currency<input value={currencyId} onChange={(event) => setCurrencyId(event.target.value)} /></label>
@@ -296,8 +330,8 @@ export function InternalInvoicesConsole() {
         </div>
 
         <div className="button-row">
-          <button type="button" className="btn" disabled={isBusy} onClick={createInternalInvoice}>Create Draft</button>
-          <button type="button" className="btn btn-secondary" disabled={isBusy || selectedId === ''} onClick={submitInternalInvoice}>Submit Selected</button>
+          <button type="button" className="btn" disabled={isBusy || runtimeConfigError !== ''} onClick={createInternalInvoice}>Create Draft</button>
+          <button type="button" className="btn btn-secondary" disabled={isBusy || runtimeConfigError !== '' || selectedId === ''} onClick={submitInternalInvoice}>Submit Selected</button>
         </div>
         {message && <p className="muted">{message}</p>}
       </section>
@@ -310,7 +344,7 @@ export function InternalInvoicesConsole() {
           <label>To Dept<input value={toDeptFilter} onChange={(event) => setToDeptFilter(event.target.value)} /></label>
         </div>
         <div className="button-row">
-          <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={listInternalInvoices}>Refresh List</button>
+          <button type="button" className="btn btn-secondary" disabled={isBusy || runtimeConfigError !== ''} onClick={listInternalInvoices}>Refresh List</button>
         </div>
 
         <div className="list">
