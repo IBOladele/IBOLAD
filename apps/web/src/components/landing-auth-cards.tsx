@@ -1,25 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { buildBearerAuthHeader, clearAuthToken, getApiBaseUrl, setAuthToken } from '@/lib/auth-client';
-
-type SessionUser = {
-  id: string;
-  email: string;
-  name: string;
-  is_active: boolean;
-};
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  buildBearerAuthHeader,
+  clearAuthToken,
+  fetchSessionProfile,
+  getApiBaseUrl,
+  setAuthToken,
+  type SessionProfile,
+  type SessionUser,
+} from '@/lib/auth-client';
 
 type AuthResponse = {
   token?: string;
   user?: SessionUser;
-  error?: string;
-};
-
-type MeResponse = {
-  user?: SessionUser;
-  roles?: string[];
-  department_ids?: string[];
   error?: string;
 };
 
@@ -34,8 +29,7 @@ export function LandingAuthCards() {
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [signedInUser, setSignedInUser] = useState<SessionUser | null>(null);
-  const [signedInRoles, setSignedInRoles] = useState<string[]>([]);
+  const [sessionProfile, setSessionProfile] = useState<SessionProfile | null>(null);
 
   const [organizationName, setOrganizationName] = useState('FinOps Group Ltd');
   const [organizationAdminName, setOrganizationAdminName] = useState('');
@@ -49,6 +43,12 @@ export function LandingAuthCards() {
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+
+  useEffect(() => {
+    void loadSessionProfile({ silent: true });
+    // loadSessionProfile intentionally not in deps to avoid re-running on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl]);
 
   async function runAuthRequest(path: string, body: Record<string, unknown>) {
     if (apiBaseUrl === '') {
@@ -70,10 +70,9 @@ export function LandingAuthCards() {
     }
 
     setAuthToken(payload.token);
-    setSignedInUser(payload.user);
   }
 
-  async function loadSessionProfile() {
+  async function loadSessionProfile(options?: { silent?: boolean }) {
     if (apiBaseUrl === '') {
       setMessage('Missing environment variable: NEXT_PUBLIC_API_BASE_URL');
       return;
@@ -81,31 +80,22 @@ export function LandingAuthCards() {
 
     const authHeaders = buildBearerAuthHeader();
     if (!authHeaders.authorization) {
-      setMessage('No active session. Sign up or log in first.');
-      setSignedInUser(null);
-      setSignedInRoles([]);
+      setSessionProfile(null);
+      if (!options?.silent) {
+        setMessage('No active session. Sign up or log in first.');
+      }
       return;
     }
 
     setIsBusy(true);
     setMessage('');
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/me`, {
-        cache: 'no-store',
-        headers: authHeaders,
-      });
-      const payload = (await response.json()) as MeResponse;
-      if (!response.ok || !payload.user) {
-        throw new Error(payload.error ?? `Session lookup failed (${response.status})`);
-      }
-
-      setSignedInUser(payload.user);
-      setSignedInRoles(payload.roles ?? []);
-      setMessage(`Signed in as ${payload.user.email}`);
+      const profile = await fetchSessionProfile(apiBaseUrl);
+      setSessionProfile(profile);
+      setMessage(`Signed in as ${profile.user.email}`);
     } catch (error) {
       clearAuthToken();
-      setSignedInUser(null);
-      setSignedInRoles([]);
+      setSessionProfile(null);
       setMessage(getErrorMessage(error));
     } finally {
       setIsBusy(false);
@@ -180,8 +170,7 @@ export function LandingAuthCards() {
 
     const authHeaders = buildBearerAuthHeader();
     clearAuthToken();
-    setSignedInUser(null);
-    setSignedInRoles([]);
+    setSessionProfile(null);
 
     if (!authHeaders.authorization) {
       setMessage('Logged out.');
@@ -198,6 +187,11 @@ export function LandingAuthCards() {
       setMessage('Logged out locally.');
     }
   }
+
+  const signedInUser = sessionProfile?.user ?? null;
+  const signedInRoles = sessionProfile?.roles ?? [];
+  const canAccessInternalInvoices = signedInUser !== null;
+  const canAccessPendingPayments = signedInRoles.includes('PAYOR') || signedInRoles.includes('ADMIN');
 
   return (
     <>
@@ -296,7 +290,7 @@ export function LandingAuthCards() {
             <button type="button" className="btn" disabled={isBusy} onClick={loginExistingUser}>
               Login to Workspace
             </button>
-            <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={loadSessionProfile}>
+            <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={() => void loadSessionProfile()}>
               Check Session
             </button>
             <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={logout}>
@@ -314,6 +308,31 @@ export function LandingAuthCards() {
             : 'No active session.'}
         </p>
         {message && <p className="muted">{message}</p>}
+      </section>
+
+      <section className="card panel">
+        <h2>Live Modules</h2>
+        <p className="muted">
+          {signedInUser
+            ? 'Your session is active. Open live modules below.'
+            : 'Sign in first to provision a session and unlock live modules.'}
+        </p>
+        <div className="pill-nav">
+          {canAccessInternalInvoices ? (
+            <Link href="/internal-invoices" className="pill-link">
+              Open Internal Invoices
+            </Link>
+          ) : (
+            <span className="pill-link is-disabled">Internal Invoices (Sign in required)</span>
+          )}
+          {canAccessPendingPayments ? (
+            <Link href="/pending-payments" className="pill-link">
+              Open Pending Payments
+            </Link>
+          ) : (
+            <span className="pill-link is-disabled">Pending Payments (PAYOR/ADMIN only)</span>
+          )}
+        </div>
       </section>
     </>
   );

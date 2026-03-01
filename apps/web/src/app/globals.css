@@ -194,6 +194,14 @@ p {
   transform: translateY(-1px);
 }
 
+.pill-link.is-disabled {
+  opacity: 0.45;
+  border-color: var(--color-border-soft);
+  color: var(--color-muted);
+  background: var(--color-surface-soft);
+  cursor: not-allowed;
+}
+
 .entry-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

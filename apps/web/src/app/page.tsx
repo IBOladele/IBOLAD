@@ -1,6 +1,5 @@
 import { SchemaPreview } from '@/components/schema-preview';
 import { LandingAuthCards } from '@/components/landing-auth-cards';
-import Link from 'next/link';
 
 export default function HomePage() {
   return (
@@ -25,19 +24,6 @@ export default function HomePage() {
       </section>
 
       <LandingAuthCards />
-
-      <section className="card panel">
-        <h2>Live Modules</h2>
-        <p className="muted">Jump into the active product surfaces used in this workspace.</p>
-        <div className="pill-nav">
-          <Link href="/internal-invoices" className="pill-link">
-            Open Internal Invoices
-          </Link>
-          <Link href="/pending-payments" className="pill-link">
-            Open Pending Payments
-          </Link>
-        </div>
-      </section>
 
       <SchemaPreview />
     </main>
