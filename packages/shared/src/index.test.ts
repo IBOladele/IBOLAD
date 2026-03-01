@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createUserSchema } from './index';
+import { createUserSchema } from './index.js';
 
 describe('createUserSchema', () => {
   it('accepts valid payloads', () => {
