@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { buildBearerAuthHeader, getApiBaseUrl } from '@/lib/auth-client';
 
 type InternalInvoiceListItem = {
   id: string;
@@ -56,22 +57,8 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? '';
-const actorUserId = process.env.NEXT_PUBLIC_FINOPS_ACTOR_USER_ID ?? '';
-const missingRuntimeConfig: string[] = [];
-
-if (apiBaseUrl === '') {
-  missingRuntimeConfig.push('NEXT_PUBLIC_API_BASE_URL');
-}
-
-if (actorUserId === '') {
-  missingRuntimeConfig.push('NEXT_PUBLIC_FINOPS_ACTOR_USER_ID');
-}
-
-const runtimeConfigError =
-  missingRuntimeConfig.length === 0
-    ? ''
-    : `Missing environment variable(s): ${missingRuntimeConfig.join(', ')}.`;
+const apiBaseUrl = getApiBaseUrl();
+const runtimeConfigError = apiBaseUrl === '' ? 'Missing environment variable: NEXT_PUBLIC_API_BASE_URL' : '';
 
 export function InternalInvoicesConsole() {
   const [fromDepartmentId, setFromDepartmentId] = useState('');
@@ -110,9 +97,23 @@ export function InternalInvoicesConsole() {
     }, 0);
   }, [lineItems]);
 
+  function getAuthHeadersOrError(): { headers: Record<string, string> } | { error: string } {
+    const authHeaders = buildBearerAuthHeader();
+    if (!authHeaders.authorization) {
+      return { error: 'Sign in first from the landing page.' };
+    }
+
+    return { headers: authHeaders };
+  }
+
   async function listInternalInvoices() {
     if (runtimeConfigError !== '') {
       setMessage(runtimeConfigError);
+      return;
+    }
+    const auth = getAuthHeadersOrError();
+    if ('error' in auth) {
+      setMessage(auth.error);
       return;
     }
 
@@ -132,6 +133,7 @@ export function InternalInvoicesConsole() {
 
       const response = await fetch(`${apiBaseUrl}/internal-invoices?${params.toString()}`, {
         cache: 'no-store',
+        headers: auth.headers,
       });
       const payload = (await response.json()) as { data?: InternalInvoiceListItem[]; error?: string };
       if (!response.ok) {
@@ -152,12 +154,18 @@ export function InternalInvoicesConsole() {
       setMessage(runtimeConfigError);
       return;
     }
+    const auth = getAuthHeadersOrError();
+    if ('error' in auth) {
+      setMessage(auth.error);
+      return;
+    }
 
     setIsBusy(true);
     setMessage('');
     try {
       const response = await fetch(`${apiBaseUrl}/internal-invoices/${invoiceId}`, {
         cache: 'no-store',
+        headers: auth.headers,
       });
       const payload = (await response.json()) as InternalInvoiceDetail & { error?: string };
       if (!response.ok) {
@@ -179,6 +187,11 @@ export function InternalInvoicesConsole() {
       setMessage(runtimeConfigError);
       return;
     }
+    const auth = getAuthHeadersOrError();
+    if ('error' in auth) {
+      setMessage(auth.error);
+      return;
+    }
 
     setIsBusy(true);
     setMessage('');
@@ -187,7 +200,7 @@ export function InternalInvoicesConsole() {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-user-id': actorUserId,
+          ...auth.headers,
         },
         body: JSON.stringify({
           from_department_id: fromDepartmentId,
@@ -236,6 +249,11 @@ export function InternalInvoicesConsole() {
       setMessage(runtimeConfigError);
       return;
     }
+    const auth = getAuthHeadersOrError();
+    if ('error' in auth) {
+      setMessage(auth.error);
+      return;
+    }
 
     if (selectedId.trim() === '') {
       setMessage('Select an invoice first.');
@@ -251,7 +269,7 @@ export function InternalInvoicesConsole() {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            'x-user-id': actorUserId,
+            ...auth.headers,
           },
           body: JSON.stringify({}),
         },

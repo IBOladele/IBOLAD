@@ -1,6 +1,6 @@
 import cors from 'cors';
 import express from 'express';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { createUserSchema } from '@repo/shared';
@@ -9,6 +9,7 @@ import {
   type FinanceRepository,
   createPrismaFinanceRepository,
 } from './finance-repository.js';
+import { type AuthRepository, createPrismaAuthRepository } from './auth-repository.js';
 import { violatesSeparationOfDuties } from './approval-engine.js';
 
 const uuidSchema = z.string().uuid();
@@ -303,8 +304,25 @@ const approvalActionSchema = z.object({
   comment: z.string().trim().min(1).max(2000),
 });
 
+const signupTypeSchema = z.enum(['ORGANIZATION', 'EMPLOYEE']);
+
+const authSignupSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  email: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+  signup_type: signupTypeSchema.default('EMPLOYEE'),
+  organization_name: z.string().trim().min(1).max(255).optional(),
+  invite_code: z.string().trim().min(3).max(255).optional(),
+});
+
+const authLoginSchema = z.object({
+  email: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  password: z.string().min(8).max(128),
+});
+
 type AppDependencies = {
   financeRepository?: FinanceRepository;
+  authRepository?: AuthRepository;
   now?: () => Date;
 };
 
@@ -312,6 +330,15 @@ type RateLimiterOptions = {
   window_ms: number;
   max_requests: number;
 };
+
+type AuthIdentity = {
+  user_id: string;
+  session_id: string | null;
+  session_expires_at: Date | null;
+};
+
+const PASSWORD_HASH_PREFIX = 'scrypt-v1';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function serializeForJson(value: unknown): unknown {
   if (typeof value === 'bigint') {
@@ -340,21 +367,96 @@ function serializeForJson(value: unknown): unknown {
   return value;
 }
 
-function parseUserId(req: express.Request): string | null {
+function parseLegacyUserId(req: express.Request): string | null {
   const userIdHeader = req.header('x-user-id');
   const parsed = uuidSchema.safeParse(userIdHeader);
   return parsed.success ? parsed.data : null;
 }
 
-async function requireUserId(req: express.Request, res: express.Response): Promise<string | null> {
-  const userId = parseUserId(req);
+function parseBearerToken(req: express.Request): string | null {
+  const authorizationHeader = req.header('authorization');
+  if (!authorizationHeader) {
+    return null;
+  }
 
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return '';
+  }
+
+  return match[1]?.trim() ?? '';
+}
+
+function hashPassword(plaintext: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(plaintext, salt, 64).toString('hex');
+  return `${PASSWORD_HASH_PREFIX}$${salt}$${hash}`;
+}
+
+function verifyPassword(plaintext: string, storedHash: string): boolean {
+  const [prefix, salt, expectedHashHex] = storedHash.split('$');
+  if (prefix !== PASSWORD_HASH_PREFIX || !salt || !expectedHashHex) {
+    return false;
+  }
+
+  const expectedHashBuffer = Buffer.from(expectedHashHex, 'hex');
+  const actualHashBuffer = scryptSync(plaintext, salt, expectedHashBuffer.length);
+  if (actualHashBuffer.length !== expectedHashBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(actualHashBuffer, expectedHashBuffer);
+}
+
+function generateSessionToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+function hashSessionToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function getAuthIdentity(res: express.Response): AuthIdentity | null {
+  const authIdentity = res.locals.auth_identity as AuthIdentity | undefined;
+  if (!authIdentity) {
+    return null;
+  }
+  return authIdentity;
+}
+
+async function requireUserId(req: express.Request, res: express.Response): Promise<string | null> {
+  const authIdentity = getAuthIdentity(res);
+  if (authIdentity?.user_id) {
+    return authIdentity.user_id;
+  }
+
+  if (res.locals.auth_token_invalid === true) {
+    res.status(401).json({ error: 'Missing or invalid bearer token' });
+    return null;
+  }
+
+  const userId = parseLegacyUserId(req);
   if (userId === null) {
-    res.status(401).json({ error: 'Missing or invalid x-user-id header' });
+    res.status(401).json({ error: 'Missing or invalid authentication credentials' });
     return null;
   }
 
   return userId;
+}
+
+function requireSessionIdentity(req: express.Request, res: express.Response): AuthIdentity | null {
+  const authIdentity = getAuthIdentity(res);
+  if (authIdentity?.session_id && authIdentity.user_id) {
+    return authIdentity;
+  }
+
+  if (parseBearerToken(req) !== null) {
+    res.status(401).json({ error: 'Missing or invalid bearer token' });
+    return null;
+  }
+
+  res.status(401).json({ error: 'Bearer token required' });
+  return null;
 }
 
 async function requireAnyRole(
@@ -646,6 +748,7 @@ function isSupportedInvoiceMimeType(mimeType: string): boolean {
 
 export function createApp(dependencies: AppDependencies = {}) {
   const financeRepository = dependencies.financeRepository ?? createPrismaFinanceRepository();
+  const authRepository = dependencies.authRepository ?? createPrismaAuthRepository();
   const now = dependencies.now ?? (() => new Date());
   const app = express();
   const authRateLimiter = createIpRateLimiter({
@@ -655,9 +758,231 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   app.use(cors());
   app.use(express.json());
+  app.use(async (req, res, next) => {
+    const bearerToken = parseBearerToken(req);
+    if (bearerToken === null) {
+      next();
+      return;
+    }
+
+    if (bearerToken === '') {
+      res.locals.auth_token_invalid = true;
+      next();
+      return;
+    }
+
+    try {
+      const tokenHash = hashSessionToken(bearerToken);
+      const session = await authRepository.findActiveSessionByTokenHash(tokenHash, now());
+      if (session === null) {
+        res.locals.auth_token_invalid = true;
+        next();
+        return;
+      }
+
+      const user = await authRepository.findUserById(session.user_id);
+      if (user === null || !user.is_active) {
+        res.locals.auth_token_invalid = true;
+        next();
+        return;
+      }
+
+      res.locals.auth_identity = {
+        user_id: user.id,
+        session_id: session.id,
+        session_expires_at: session.expires_at,
+      } satisfies AuthIdentity;
+
+      next();
+    } catch {
+      res.locals.auth_token_invalid = true;
+      next();
+    }
+  });
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  app.post('/auth/signup', authRateLimiter, async (req, res) => {
+    const parsed = authSignupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid payload',
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const payload = parsed.data;
+    const existingUser = await authRepository.findUserByEmail(payload.email);
+    if (existingUser && existingUser.password_hash !== null) {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+
+    const passwordHash = hashPassword(payload.password);
+    const roleCode = payload.signup_type === 'ORGANIZATION' ? 'ADMIN' : 'EMPLOYEE';
+    const createdAt = now();
+    const sessionExpiresAt = new Date(createdAt.getTime() + SESSION_TTL_MS);
+    const sessionToken = generateSessionToken();
+
+    try {
+      const user =
+        existingUser === null
+          ? await authRepository.createUser({
+              email: payload.email,
+              full_name: payload.name,
+              password_hash: passwordHash,
+            })
+          : await authRepository.updateUserPassword(existingUser.id, {
+              password_hash: passwordHash,
+              full_name: payload.name,
+            });
+
+      await authRepository.assignRoleByCode(user.id, roleCode);
+      const session = await authRepository.createSession({
+        user_id: user.id,
+        token_hash: hashSessionToken(sessionToken),
+        expires_at: sessionExpiresAt,
+      });
+
+      await financeRepository.createAuditEvent({
+        actor_user_id: user.id,
+        event_type: 'auth.signup',
+        entity_type: 'USER',
+        entity_id: user.id,
+        payload: {
+          signup_type: payload.signup_type,
+          role_code: roleCode,
+          organization_name: payload.organization_name,
+          invite_code_present: payload.invite_code !== undefined,
+          session_id: session.id,
+          session_expires_at: sessionExpiresAt.toISOString(),
+        },
+        occurred_at: createdAt,
+      });
+
+      return res.status(201).json({
+        token: sessionToken,
+        expires_at: sessionExpiresAt.toISOString(),
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.full_name,
+          is_active: user.is_active,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return res.status(409).json({ error: 'Email already exists' });
+      }
+      return res.status(500).json({ error: 'Failed to create user account' });
+    }
+  });
+
+  app.post('/auth/login', authRateLimiter, async (req, res) => {
+    const parsed = authLoginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid payload',
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const payload = parsed.data;
+    const user = await authRepository.findUserByEmail(payload.email);
+    if (user === null || user.password_hash === null || !verifyPassword(payload.password, user.password_hash)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!user.is_active) {
+      return res.status(403).json({ error: 'User account is inactive' });
+    }
+
+    const loginAt = now();
+    const sessionExpiresAt = new Date(loginAt.getTime() + SESSION_TTL_MS);
+    const sessionToken = generateSessionToken();
+    const session = await authRepository.createSession({
+      user_id: user.id,
+      token_hash: hashSessionToken(sessionToken),
+      expires_at: sessionExpiresAt,
+    });
+
+    await financeRepository.createAuditEvent({
+      actor_user_id: user.id,
+      event_type: 'auth.login',
+      entity_type: 'USER',
+      entity_id: user.id,
+      payload: {
+        session_id: session.id,
+        session_expires_at: sessionExpiresAt.toISOString(),
+      },
+      occurred_at: loginAt,
+    });
+
+    return res.status(200).json({
+      token: sessionToken,
+      expires_at: sessionExpiresAt.toISOString(),
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.full_name,
+        is_active: user.is_active,
+      },
+    });
+  });
+
+  app.get('/auth/me', async (req, res) => {
+    const authIdentity = requireSessionIdentity(req, res);
+    if (authIdentity === null) {
+      return;
+    }
+
+    const user = await authRepository.findUserById(authIdentity.user_id);
+    if (user === null) {
+      return res.status(401).json({ error: 'Invalid session user' });
+    }
+
+    const [roleCodes, departmentIds] = await Promise.all([
+      financeRepository.getUserRoleCodes(user.id),
+      financeRepository.getUserDepartmentIds(user.id),
+    ]);
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.full_name,
+        is_active: user.is_active,
+      },
+      roles: roleCodes,
+      department_ids: departmentIds,
+      session: {
+        id: authIdentity.session_id,
+        expires_at: authIdentity.session_expires_at?.toISOString() ?? null,
+      },
+    });
+  });
+
+  app.post('/auth/logout', async (req, res) => {
+    const authIdentity = requireSessionIdentity(req, res);
+    if (authIdentity === null || authIdentity.session_id === null) {
+      return;
+    }
+
+    const revokedAt = now();
+    await authRepository.revokeSession(authIdentity.session_id, revokedAt);
+    await financeRepository.createAuditEvent({
+      actor_user_id: authIdentity.user_id,
+      event_type: 'auth.logout',
+      entity_type: 'AUTH_SESSION',
+      entity_id: authIdentity.session_id,
+      payload: {
+        revoked_at: revokedAt.toISOString(),
+      },
+      occurred_at: revokedAt,
+    });
+
+    return res.status(204).send();
   });
 
   app.post('/users', authRateLimiter, (req, res) => {

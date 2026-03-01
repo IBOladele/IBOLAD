@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { buildBearerAuthHeader, getApiBaseUrl } from '@/lib/auth-client';
 
 type PendingPaymentItem = {
   id: string;
@@ -20,22 +21,8 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? '';
-const actorUserId = process.env.NEXT_PUBLIC_FINOPS_ACTOR_USER_ID ?? '';
-const missingRuntimeConfig: string[] = [];
-
-if (apiBaseUrl === '') {
-  missingRuntimeConfig.push('NEXT_PUBLIC_API_BASE_URL');
-}
-
-if (actorUserId === '') {
-  missingRuntimeConfig.push('NEXT_PUBLIC_FINOPS_ACTOR_USER_ID');
-}
-
-const runtimeConfigError =
-  missingRuntimeConfig.length === 0
-    ? ''
-    : `Missing environment variable(s): ${missingRuntimeConfig.join(', ')}.`;
+const apiBaseUrl = getApiBaseUrl();
+const runtimeConfigError = apiBaseUrl === '' ? 'Missing environment variable: NEXT_PUBLIC_API_BASE_URL' : '';
 
 export function PendingPaymentsConsole() {
   const [paymentReference, setPaymentReference] = useState('');
@@ -45,9 +32,23 @@ export function PendingPaymentsConsole() {
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState('');
 
+  function getAuthHeadersOrError(): { headers: Record<string, string> } | { error: string } {
+    const authHeaders = buildBearerAuthHeader();
+    if (!authHeaders.authorization) {
+      return { error: 'Sign in first from the landing page.' };
+    }
+
+    return { headers: authHeaders };
+  }
+
   async function loadPendingPayments() {
     if (runtimeConfigError !== '') {
       setMessage(runtimeConfigError);
+      return;
+    }
+    const auth = getAuthHeadersOrError();
+    if ('error' in auth) {
+      setMessage(auth.error);
       return;
     }
 
@@ -63,9 +64,7 @@ export function PendingPaymentsConsole() {
         `${apiBaseUrl}/spend-items/pending-payment?${params.toString()}`,
         {
           cache: 'no-store',
-          headers: {
-            'x-user-id': actorUserId,
-          },
+          headers: auth.headers,
         },
       );
 
@@ -92,6 +91,11 @@ export function PendingPaymentsConsole() {
       setMessage(runtimeConfigError);
       return;
     }
+    const auth = getAuthHeadersOrError();
+    if ('error' in auth) {
+      setMessage(auth.error);
+      return;
+    }
 
     if (selectedSpendItemId.trim() === '') {
       setMessage('Select a spend item first.');
@@ -107,7 +111,7 @@ export function PendingPaymentsConsole() {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            'x-user-id': actorUserId,
+            ...auth.headers,
           },
           body: JSON.stringify({
             payment_reference: paymentReference,
