@@ -3,15 +3,30 @@ import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <main className="container">
-      <h1>Monorepo Starter</h1>
-      <p>The frontend consumes shared Zod schemas from <code>@repo/shared</code>.</p>
-      <p>
-        <Link href="/internal-invoices">Open Internal Invoices UI</Link>
-      </p>
-      <p>
-        <Link href="/pending-payments">Open Pending Payments UI</Link>
-      </p>
+    <main className="container app-shell">
+      <section className="hero card">
+        <p className="eyebrow">Finance Operations Workspace</p>
+        <h1>Unified Finance Console</h1>
+        <p className="hero-copy">
+          Manage internal invoices, approvals, and payment execution from one focused interface.
+        </p>
+        <div className="pill-nav">
+          <Link href="/internal-invoices" className="pill-link">
+            Internal Invoices
+          </Link>
+          <Link href="/pending-payments" className="pill-link">
+            Pending Payments
+          </Link>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Platform Notes</h2>
+        <p>
+          This frontend consumes shared Zod schemas from <code>@repo/shared</code>.
+        </p>
+      </section>
+
       <SchemaPreview />
     </main>
   );

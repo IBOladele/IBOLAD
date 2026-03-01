@@ -248,8 +248,8 @@ export function InternalInvoicesConsole() {
   }
 
   return (
-    <div className="internal-invoice-grid">
-      <section className="card">
+    <div className="dashboard-grid">
+      <section className="card panel">
         <h2>Create Internal Invoice</h2>
         <div className="form-grid">
           <label>API Base URL<input value={apiBaseUrl} onChange={(event) => setApiBaseUrl(event.target.value)} /></label>
@@ -283,7 +283,7 @@ export function InternalInvoicesConsole() {
               />
             </div>
           ))}
-          <button type="button" onClick={addLineItem}>Add Line</button>
+          <button type="button" className="btn btn-secondary" onClick={addLineItem}>Add Line</button>
           <p className="muted">Draft computed total (minor): {computedDraftTotal}</p>
         </div>
 
@@ -296,13 +296,13 @@ export function InternalInvoicesConsole() {
         </div>
 
         <div className="button-row">
-          <button type="button" disabled={isBusy} onClick={createInternalInvoice}>Create Draft</button>
-          <button type="button" disabled={isBusy || selectedId === ''} onClick={submitInternalInvoice}>Submit Selected</button>
+          <button type="button" className="btn" disabled={isBusy} onClick={createInternalInvoice}>Create Draft</button>
+          <button type="button" className="btn btn-secondary" disabled={isBusy || selectedId === ''} onClick={submitInternalInvoice}>Submit Selected</button>
         </div>
         {message && <p className="muted">{message}</p>}
       </section>
 
-      <section className="card">
+      <section className="card panel">
         <h2>List + Detail</h2>
         <div className="form-grid">
           <label>Status<input value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} placeholder="DRAFT / OPEN" /></label>
@@ -310,7 +310,7 @@ export function InternalInvoicesConsole() {
           <label>To Dept<input value={toDeptFilter} onChange={(event) => setToDeptFilter(event.target.value)} /></label>
         </div>
         <div className="button-row">
-          <button type="button" disabled={isBusy} onClick={listInternalInvoices}>Refresh List</button>
+          <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={listInternalInvoices}>Refresh List</button>
         </div>
 
         <div className="list">
@@ -322,8 +322,8 @@ export function InternalInvoicesConsole() {
               onClick={() => loadDetail(invoice.id)}
             >
               <strong>{invoice.invoice_number}</strong>
-              <span>{invoice.status}</span>
-              <span>{invoice.total_amount_minor} minor</span>
+              <span className="list-meta">{invoice.status}</span>
+              <span className="list-meta">{invoice.total_amount_minor} minor</span>
             </button>
           ))}
           {listData.length === 0 && <p className="muted">No invoices loaded.</p>}
@@ -335,7 +335,7 @@ export function InternalInvoicesConsole() {
             <p className="muted">Status: {detailData.internal_invoice.status}</p>
             <p className="muted">Spend Item: {detailData.internal_invoice.spend_item_id ?? 'None'}</p>
             <h4>Line Items</h4>
-            <ul>
+            <ul className="detail-list">
               {detailData.line_items.map((lineItem) => (
                 <li key={lineItem.id}>
                   {lineItem.description} | qty {lineItem.quantity} | line {lineItem.line_amount_minor}
@@ -343,7 +343,7 @@ export function InternalInvoicesConsole() {
               ))}
             </ul>
             <h4>Attachments</h4>
-            <ul>
+            <ul className="detail-list">
               {detailData.attachments.map((attachment) => (
                 <li key={attachment.id}>
                   {attachment.file_name} ({attachment.mime_type}, {attachment.size_bytes} bytes)
@@ -351,7 +351,7 @@ export function InternalInvoicesConsole() {
               ))}
             </ul>
             <h4>Timeline</h4>
-            <ul>
+            <ul className="detail-list">
               {detailData.timeline.map((event, index) => (
                 <li key={`${event.event_type}-${index}`}>
                   {event.event_type} @ {new Date(event.occurred_at).toLocaleString()}

@@ -108,8 +108,8 @@ export function PendingPaymentsConsole() {
   }
 
   return (
-    <div className="internal-invoice-grid">
-      <section className="card">
+    <div className="dashboard-grid">
+      <section className="card panel">
         <h2>Pending Payment Queue</h2>
         <div className="form-grid">
           <label>
@@ -122,7 +122,7 @@ export function PendingPaymentsConsole() {
           </label>
         </div>
         <div className="button-row">
-          <button type="button" disabled={isBusy} onClick={loadPendingPayments}>
+          <button type="button" className="btn btn-secondary" disabled={isBusy} onClick={loadPendingPayments}>
             Refresh Pending
           </button>
         </div>
@@ -136,16 +136,16 @@ export function PendingPaymentsConsole() {
               onClick={() => setSelectedSpendItemId(item.id)}
             >
               <strong>{item.description}</strong>
-              <span>{item.spend_item_type}</span>
-              <span>{item.amount_minor} minor</span>
-              <span>Approved: {item.approved_at ? new Date(item.approved_at).toLocaleString() : 'N/A'}</span>
+              <span className="list-meta">{item.spend_item_type}</span>
+              <span className="list-meta">{item.amount_minor} minor</span>
+              <span className="list-meta">Approved: {item.approved_at ? new Date(item.approved_at).toLocaleString() : 'N/A'}</span>
             </button>
           ))}
           {pendingItems.length === 0 && <p className="muted">No approved spend items pending payment.</p>}
         </div>
       </section>
 
-      <section className="card">
+      <section className="card panel">
         <h2>Mark As Paid</h2>
         <div className="form-grid">
           <label>
@@ -162,7 +162,7 @@ export function PendingPaymentsConsole() {
           </label>
         </div>
         <div className="button-row">
-          <button type="button" disabled={isBusy || selectedSpendItemId === ''} onClick={markSelectedPaid}>
+          <button type="button" className="btn" disabled={isBusy || selectedSpendItemId === ''} onClick={markSelectedPaid}>
             Mark Paid
           </button>
         </div>

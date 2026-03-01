@@ -9,7 +9,7 @@ export function SchemaPreview() {
   const parsed = createUserSchema.safeParse(payload);
 
   return (
-    <section className="card">
+    <section className="card panel">
       <h2>Shared schema status</h2>
       <p>{parsed.success ? 'Sample payload is valid.' : 'Sample payload is invalid.'}</p>
     </section>
