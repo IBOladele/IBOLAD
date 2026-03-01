@@ -10,6 +10,8 @@
     "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev --workspace @repo/api\" \"npm run dev --workspace @repo/web\"",
     "dev:api": "npm run dev --workspace @repo/api",
     "dev:web": "npm run dev --workspace @repo/web",
+    "start": "npm run start --workspace @repo/api",
+    "start:api": "npm run start --workspace @repo/api",
     "lint": "npm run lint --workspaces --if-present",
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "format": "prettier --write .",
