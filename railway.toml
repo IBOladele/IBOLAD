@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "yarn install --frozen-lockfile && yarn workspace @repo/api prisma:generate && yarn workspace @repo/api prisma:migrate:deploy && yarn workspace @repo/api build"
+buildCommand = "yarn install --frozen-lockfile && yarn workspace @repo/shared build && yarn workspace @repo/api prisma:generate && yarn workspace @repo/api prisma:migrate:deploy && yarn workspace @repo/api build"
 
 [deploy]
 startCommand = "npm run start --workspace @repo/api"
