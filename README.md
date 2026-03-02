@@ -1,55 +1,35 @@
-# Operator's Notebook
+# Monorepo Starter
 
-A philosophy-first personal website and blog built with Astro, TypeScript, Tailwind CSS, and MDX.
+## Structure
+- `apps/api`: TypeScript backend (Express)
+- `apps/web`: Next.js frontend
+- `packages/shared`: Zod schemas and shared types
 
-## Setup
+## Prerequisites
+- Node.js 20+
+- npm 10+
+- Docker
 
-1. Install dependencies:
-
+## Install
 ```bash
 npm install
 ```
 
-2. Start the dev server:
-
+## Run development servers
 ```bash
 npm run dev
 ```
 
-3. Build for production:
-
+## Run checks
 ```bash
+npm run lint
+npm run test
 npm run build
 ```
 
-## Adding A Blog Post
-
-1. Create a new Markdown or MDX file in `src/content/blog/`.
-2. Use the required frontmatter fields:
-
-```md
----
-title: "Your title"
-description: "A short summary"
-pubDate: 2026-02-15
-tags: ["systems", "trust"]
-pillar: "Continuity"
-draft: false
----
+## Start Postgres locally
+```bash
+docker compose up -d postgres
 ```
 
-- `updatedDate` is optional.
-- `draft: true` keeps a post out of production builds.
-
-## Update Site Metadata
-
-Edit `src/consts.ts` to change the site name, description, and canonical URL before deploying.
-
-## Deploy To Vercel
-
-1. Push the repository to GitHub.
-2. Import the project in Vercel.
-3. Set the build command to `npm run build` and the output directory to `dist`.
-4. Add the production URL to `src/consts.ts` and `astro.config.mjs`.
-
-Vercel will auto-detect Astro and handle the rest.
+The API expects `DATABASE_URL` from `.env` (see `.env.example`).

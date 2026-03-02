@@ -1,0 +1,703 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentRequestStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  APPROVED
+  REJECTED
+  PAID
+  VOID
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PROCESSED
+  CANCELLED
+}
+
+enum PayrollAdjustmentType {
+  EARNING
+  DEDUCTION
+  CORRECTION
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ApprovalPolicyScope {
+  PAYMENT_REQUEST
+  EXTERNAL_INVOICE
+  INTERNAL_INVOICE
+  PAYROLL_RUN
+  SPEND_ITEM
+}
+
+enum ApprovalEntityType {
+  PAYMENT_REQUEST
+  EXTERNAL_INVOICE
+  INTERNAL_INVOICE
+  PAYROLL_RUN
+  SPEND_ITEM
+}
+
+enum ApprovalInstanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_INFO
+  CANCELLED
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REQUESTED_INFO
+  SKIPPED
+}
+
+enum SpendItemType {
+  GENERAL
+  EXTERNAL_INVOICE
+  INTERNAL_INVOICE
+  PAYROLL_RUN
+}
+
+enum SpendItemStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  PAID
+  REJECTED
+  NEEDS_INFO
+}
+
+model User {
+  id                          String             @id @default(uuid()) @db.Uuid
+  email                       String             @unique @db.VarChar(255)
+  full_name                   String             @db.VarChar(255)
+  password_hash               String?            @db.Text
+  is_active                   Boolean            @default(true)
+  created_at                  DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
+  user_departments            UserDepartment[]
+  user_roles                  UserRole[]
+  auth_sessions               AuthSession[]
+  created_spend_items         SpendItem[]        @relation("spend_items_created_by")
+  requested_payment_requests  PaymentRequest[]   @relation("payment_requests_requested_by")
+  created_internal_invoices   InternalInvoice[]  @relation("internal_invoices_created_by")
+  employee                    Employee?
+  created_payroll_runs        PayrollRun[]       @relation("payroll_runs_created_by")
+  created_payroll_adjustments PayrollAdjustment[] @relation("payroll_adjustments_created_by")
+  created_approval_policies   ApprovalPolicy[]   @relation("approval_policies_created_by")
+  requested_approval_instances ApprovalInstance[] @relation("approval_instances_requested_by")
+  assigned_approval_steps     ApprovalStep[]     @relation("approval_steps_assigned_user")
+  acted_approval_steps        ApprovalStep[]     @relation("approval_steps_acted_by_user")
+  approval_policy_rules       ApprovalPolicyRule[]
+  audit_events                AuditEvent[]       @relation("audit_events_actor_user")
+
+  @@map("users")
+}
+
+model Department {
+  id                          String                  @id @default(uuid()) @db.Uuid
+  code                        String                  @unique @db.VarChar(64)
+  name                        String                  @db.VarChar(255)
+  created_at                  DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+  user_departments            UserDepartment[]
+  spend_items                 SpendItem[]
+  payment_requests            PaymentRequest[]
+  employees                   Employee[]
+  internal_invoices_from      InternalInvoice[]        @relation("internal_invoices_from_department")
+  internal_invoices_to        InternalInvoice[]        @relation("internal_invoices_to_department")
+  internal_invoice_line_items InternalInvoiceLineItem[]
+  approval_policies           ApprovalPolicy[]
+  approval_policy_rules       ApprovalPolicyRule[]
+
+  @@map("departments")
+}
+
+model UserDepartment {
+  id            String     @id @default(uuid()) @db.Uuid
+  user_id       String     @db.Uuid
+  department_id String     @db.Uuid
+  is_primary    Boolean    @default(false)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
+  user          User       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  department    Department @relation(fields: [department_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([user_id, department_id], map: "uq_user_departments_user_department")
+  @@index([user_id], map: "idx_user_departments_user_id")
+  @@index([department_id], map: "idx_user_departments_department_id")
+  @@map("user_departments")
+}
+
+model Role {
+  id                    String               @id @default(uuid()) @db.Uuid
+  code                  String               @unique @db.VarChar(64)
+  name                  String               @db.VarChar(255)
+  description           String?              @db.Text
+  created_at            DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  user_roles            UserRole[]
+  approval_policy_rules ApprovalPolicyRule[]
+  approval_steps        ApprovalStep[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  role_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role       Role     @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([user_id, role_id], map: "uq_user_roles_user_role")
+  @@index([user_id], map: "idx_user_roles_user_id")
+  @@index([role_id], map: "idx_user_roles_role_id")
+  @@map("user_roles")
+}
+
+model AuthSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @unique @db.VarChar(128)
+  expires_at DateTime  @db.Timestamptz(6)
+  revoked_at DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([user_id], map: "idx_auth_sessions_user_id")
+  @@index([expires_at], map: "idx_auth_sessions_expires_at")
+  @@map("auth_sessions")
+}
+
+model Currency {
+  id                       String            @id @default(uuid()) @db.Uuid
+  code                     String            @unique @db.Char(3)
+  name                     String            @db.VarChar(64)
+  symbol                   String?           @db.VarChar(16)
+  minor_unit               Int               @default(2) @db.SmallInt
+  created_at               DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  base_fx_rates            FxRate[]          @relation("fx_rates_base_currency")
+  quote_fx_rates           FxRate[]          @relation("fx_rates_quote_currency")
+  vendors_default_currency Vendor[]
+  vendor_bank_accounts     VendorBankAccount[]
+  spend_items_currency     SpendItem[]       @relation("spend_items_currency")
+  spend_items_base_currency SpendItem[]      @relation("spend_items_base_currency")
+  payment_requests         PaymentRequest[]  @relation("payment_requests_currency")
+  base_payment_requests    PaymentRequest[]  @relation("payment_requests_base_currency")
+  external_invoices        ExternalInvoice[]
+  internal_invoices_currency InternalInvoice[] @relation("internal_invoices_currency")
+  approval_policies_base   ApprovalPolicy[]    @relation("approval_policies_base_currency")
+  employees_salary         Employee[]
+  payroll_runs             PayrollRun[]
+  payroll_run_items        PayrollRunItem[]
+  payroll_adjustments      PayrollAdjustment[]
+
+  @@map("currencies")
+}
+
+model FxRate {
+  id                String   @id @default(uuid()) @db.Uuid
+  base_currency_id  String   @db.Uuid
+  quote_currency_id String   @db.Uuid
+  fx_rate_ppm       BigInt
+  effective_at      DateTime @db.Timestamptz(6)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  base_currency     Currency @relation("fx_rates_base_currency", fields: [base_currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  quote_currency    Currency @relation("fx_rates_quote_currency", fields: [quote_currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([base_currency_id, quote_currency_id, effective_at], map: "uq_fx_rates_pair_effective_at")
+  @@index([base_currency_id], map: "idx_fx_rates_base_currency_id")
+  @@index([quote_currency_id], map: "idx_fx_rates_quote_currency_id")
+  @@map("fx_rates")
+}
+
+model Vendor {
+  id                  String              @id @default(uuid()) @db.Uuid
+  name                String              @db.VarChar(255)
+  legal_name          String?             @db.VarChar(255)
+  email               String?             @db.VarChar(255)
+  phone               String?             @db.VarChar(64)
+  default_currency_id String?             @db.Uuid
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  default_currency    Currency?           @relation(fields: [default_currency_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendor_bank_accounts VendorBankAccount[]
+  spend_items         SpendItem[]
+  payment_requests    PaymentRequest[]
+  external_invoices   ExternalInvoice[]
+  internal_invoices   InternalInvoice[]
+
+  @@index([default_currency_id], map: "idx_vendors_default_currency_id")
+  @@map("vendors")
+}
+
+model VendorBankAccount {
+  id             String   @id @default(uuid()) @db.Uuid
+  vendor_id      String   @db.Uuid
+  currency_id    String   @db.Uuid
+  account_name   String   @db.VarChar(255)
+  account_number String   @db.VarChar(128)
+  bank_name      String   @db.VarChar(255)
+  iban           String?  @db.VarChar(64)
+  swift_code     String?  @db.VarChar(32)
+  is_primary     Boolean  @default(false)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  vendor         Vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  currency       Currency @relation(fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([vendor_id, account_number, bank_name], map: "uq_vendor_bank_accounts_vendor_account_bank")
+  @@index([vendor_id], map: "idx_vendor_bank_accounts_vendor_id")
+  @@index([currency_id], map: "idx_vendor_bank_accounts_currency_id")
+  @@map("vendor_bank_accounts")
+}
+
+model File {
+  id              String          @id @default(uuid()) @db.Uuid
+  storage_key     String          @unique @db.VarChar(512)
+  file_name       String          @db.VarChar(255)
+  mime_type       String          @db.VarChar(128)
+  size_bytes      BigInt
+  checksum_sha256 String?         @db.VarChar(64)
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  spend_item_files SpendItemFile[]
+
+  @@map("files")
+}
+
+model SpendItem {
+  id                 String          @id @default(uuid()) @db.Uuid
+  vendor_id          String?         @db.Uuid
+  department_id      String?         @db.Uuid
+  currency_id        String          @db.Uuid
+  base_currency_id   String?         @db.Uuid
+  created_by_user_id String?         @db.Uuid
+  spend_item_type    SpendItemType   @default(GENERAL)
+  description        String          @db.Text
+  amount_minor       BigInt
+  base_amount_minor  BigInt?
+  status             SpendItemStatus  @default(DRAFT)
+  incurred_at        DateTime        @db.Timestamptz(6)
+  submitted_at       DateTime?       @db.Timestamptz(6)
+  approved_at        DateTime?       @db.Timestamptz(6)
+  payment_reference  String?         @db.VarChar(255)
+  paid_at            DateTime?       @db.Timestamptz(6)
+  fx_rate_ppm        BigInt?
+  fx_rate_locked_at  DateTime?       @db.Timestamptz(6)
+  created_at         DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  vendor             Vendor?         @relation(fields: [vendor_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  department         Department?     @relation(fields: [department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  currency           Currency        @relation("spend_items_currency", fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  base_currency      Currency?       @relation("spend_items_base_currency", fields: [base_currency_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  created_by_user    User?           @relation("spend_items_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  spend_item_files   SpendItemFile[]
+  payment_requests   PaymentRequest[]
+  external_invoices  ExternalInvoice[]
+  internal_invoices  InternalInvoice[]
+  payroll_runs       PayrollRun[]
+
+  @@index([vendor_id], map: "idx_spend_items_vendor_id")
+  @@index([department_id], map: "idx_spend_items_department_id")
+  @@index([currency_id], map: "idx_spend_items_currency_id")
+  @@index([base_currency_id], map: "idx_spend_items_base_currency_id")
+  @@index([status], map: "idx_spend_items_status")
+  @@index([created_by_user_id], map: "idx_spend_items_created_by_user_id")
+  @@index([submitted_at], map: "idx_spend_items_submitted_at")
+  @@index([approved_at], map: "idx_spend_items_approved_at")
+  @@index([paid_at], map: "idx_spend_items_paid_at")
+  @@map("spend_items")
+}
+
+model SpendItemFile {
+  id            String    @id @default(uuid()) @db.Uuid
+  spend_item_id String    @db.Uuid
+  file_id       String    @db.Uuid
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  spend_item    SpendItem @relation(fields: [spend_item_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  file          File      @relation(fields: [file_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([spend_item_id, file_id], map: "uq_spend_item_files_item_file")
+  @@index([spend_item_id], map: "idx_spend_item_files_spend_item_id")
+  @@index([file_id], map: "idx_spend_item_files_file_id")
+  @@map("spend_item_files")
+}
+
+model PaymentRequest {
+  id                    String               @id @default(uuid()) @db.Uuid
+  request_number        String               @unique @db.VarChar(64)
+  spend_item_id         String?              @db.Uuid
+  vendor_id             String?              @db.Uuid
+  department_id         String?              @db.Uuid
+  currency_id           String               @db.Uuid
+  base_currency_id      String?              @db.Uuid
+  requested_by_user_id  String               @db.Uuid
+  requested_amount_minor BigInt
+  approved_amount_minor BigInt?
+  base_amount_minor     BigInt?
+  fx_rate_ppm           BigInt?
+  fx_rate_locked_at     DateTime?            @db.Timestamptz(6)
+  status                PaymentRequestStatus @default(DRAFT)
+  requested_at          DateTime             @default(now()) @db.Timestamptz(6)
+  due_at                DateTime?            @db.Timestamptz(6)
+  submitted_at          DateTime?            @db.Timestamptz(6)
+  created_at            DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  spend_item            SpendItem?           @relation(fields: [spend_item_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendor                Vendor?              @relation(fields: [vendor_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  department            Department?          @relation(fields: [department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  currency              Currency             @relation("payment_requests_currency", fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  base_currency         Currency?            @relation("payment_requests_base_currency", fields: [base_currency_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  requested_by_user     User                 @relation("payment_requests_requested_by", fields: [requested_by_user_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  external_invoices     ExternalInvoice[]
+  internal_invoices     InternalInvoice[]
+
+  @@index([spend_item_id], map: "idx_payment_requests_spend_item_id")
+  @@index([vendor_id], map: "idx_payment_requests_vendor_id")
+  @@index([department_id], map: "idx_payment_requests_department_id")
+  @@index([currency_id], map: "idx_payment_requests_currency_id")
+  @@index([base_currency_id], map: "idx_payment_requests_base_currency_id")
+  @@index([requested_by_user_id], map: "idx_payment_requests_requested_by_user_id")
+  @@index([status], map: "idx_payment_requests_status")
+  @@index([submitted_at], map: "idx_payment_requests_submitted_at")
+  @@map("payment_requests")
+}
+
+model ExternalInvoice {
+  id                   String        @id @default(uuid()) @db.Uuid
+  payment_request_id   String?       @db.Uuid
+  spend_item_id        String?       @db.Uuid
+  vendor_id            String        @db.Uuid
+  currency_id          String        @db.Uuid
+  invoice_number       String        @db.VarChar(128)
+  invoice_date         DateTime      @db.Date
+  due_date             DateTime?     @db.Date
+  subtotal_amount_minor BigInt?
+  tax_amount_minor     BigInt?
+  total_amount_minor   BigInt
+  status               InvoiceStatus @default(OPEN)
+  received_at          DateTime?     @db.Timestamptz(6)
+  created_at           DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  payment_request      PaymentRequest? @relation(fields: [payment_request_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  spend_item           SpendItem?    @relation(fields: [spend_item_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendor               Vendor        @relation(fields: [vendor_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currency             Currency      @relation(fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([payment_request_id], map: "idx_external_invoices_payment_request_id")
+  @@index([spend_item_id], map: "idx_external_invoices_spend_item_id")
+  @@index([vendor_id], map: "idx_external_invoices_vendor_id")
+  @@index([currency_id], map: "idx_external_invoices_currency_id")
+  @@index([vendor_id, invoice_number], map: "idx_external_invoices_vendor_invoice_number")
+  @@map("external_invoices")
+}
+
+model InternalInvoice {
+  id                 String               @id @default(uuid()) @db.Uuid
+  payment_request_id String?              @db.Uuid
+  spend_item_id      String?              @db.Uuid
+  vendor_id          String?              @db.Uuid
+  from_department_id String?              @map("department_id") @db.Uuid
+  to_department_id   String?              @db.Uuid
+  currency_id        String               @db.Uuid
+  created_by_user_id String?              @db.Uuid
+  invoice_number     String               @db.VarChar(128)
+  invoice_date       DateTime             @db.Date
+  due_date           DateTime?            @db.Date
+  total_amount_minor BigInt
+  status             InvoiceStatus        @default(OPEN)
+  submitted_at       DateTime?            @db.Timestamptz(6)
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  payment_request    PaymentRequest?      @relation(fields: [payment_request_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  spend_item         SpendItem?           @relation(fields: [spend_item_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  vendor             Vendor?              @relation(fields: [vendor_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  from_department    Department?          @relation("internal_invoices_from_department", fields: [from_department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  to_department      Department?          @relation("internal_invoices_to_department", fields: [to_department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  currency           Currency             @relation("internal_invoices_currency", fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  created_by_user    User?                @relation("internal_invoices_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  line_items         InternalInvoiceLineItem[]
+
+  @@unique([vendor_id, invoice_number], map: "uq_internal_invoices_vendor_invoice_number")
+  @@index([payment_request_id], map: "idx_internal_invoices_payment_request_id")
+  @@index([spend_item_id], map: "idx_internal_invoices_spend_item_id")
+  @@index([vendor_id], map: "idx_internal_invoices_vendor_id")
+  @@index([from_department_id], map: "idx_internal_invoices_department_id")
+  @@index([to_department_id], map: "idx_internal_invoices_to_department_id")
+  @@index([currency_id], map: "idx_internal_invoices_currency_id")
+  @@index([created_by_user_id], map: "idx_internal_invoices_created_by_user_id")
+  @@map("internal_invoices")
+}
+
+model InternalInvoiceLineItem {
+  id                 String          @id @default(uuid()) @db.Uuid
+  internal_invoice_id String         @db.Uuid
+  department_id      String?         @db.Uuid
+  description        String          @db.Text
+  quantity           Decimal         @default(1) @db.Decimal(18, 6)
+  unit_amount_minor  BigInt
+  line_amount_minor  BigInt
+  created_at         DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
+  internal_invoice   InternalInvoice @relation(fields: [internal_invoice_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  department         Department?     @relation(fields: [department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([internal_invoice_id], map: "idx_internal_invoice_line_items_internal_invoice_id")
+  @@index([department_id], map: "idx_internal_invoice_line_items_department_id")
+  @@map("internal_invoice_line_items")
+}
+
+model Employee {
+  id                  String              @id @default(uuid()) @db.Uuid
+  user_id             String              @unique @db.Uuid
+  department_id       String?             @db.Uuid
+  salary_currency_id  String?             @db.Uuid
+  employee_number     String              @unique @db.VarChar(64)
+  legal_name          String              @db.VarChar(255)
+  hire_date           DateTime            @db.Date
+  termination_date    DateTime?           @db.Date
+  base_salary_minor   BigInt?
+  is_active           Boolean             @default(true)
+  status              EmployeeStatus      @default(ACTIVE)
+  bank_details_encrypted String?
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  user                User                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  department          Department?         @relation(fields: [department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  salary_currency     Currency?           @relation(fields: [salary_currency_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  payroll_run_items   PayrollRunItem[]
+  payroll_adjustments PayrollAdjustment[]
+
+  @@index([department_id], map: "idx_employees_department_id")
+  @@index([salary_currency_id], map: "idx_employees_salary_currency_id")
+  @@map("employees")
+}
+
+model PayrollRun {
+  id                  String             @id @default(uuid()) @db.Uuid
+  run_number          String             @unique @db.VarChar(64)
+  period_start        DateTime?          @db.Date
+  period_end          DateTime?          @db.Date
+  pay_date            DateTime?          @db.Date
+  currency_id         String             @db.Uuid
+  spend_item_id       String?            @db.Uuid
+  created_by_user_id  String?            @db.Uuid
+  status              PayrollRunStatus   @default(DRAFT)
+  total_gross_minor   BigInt?
+  total_net_minor     BigInt?
+  submitted_at        DateTime?          @db.Timestamptz(6)
+  payment_reference   String?            @db.VarChar(255)
+  paid_at             DateTime?          @db.Timestamptz(6)
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
+  currency            Currency           @relation(fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  spend_item          SpendItem?         @relation(fields: [spend_item_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  created_by_user     User?              @relation("payroll_runs_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  payroll_run_items   PayrollRunItem[]
+  payroll_adjustments PayrollAdjustment[]
+
+  @@unique([period_start, period_end, currency_id], map: "uq_payroll_runs_period_currency")
+  @@index([currency_id], map: "idx_payroll_runs_currency_id")
+  @@index([spend_item_id], map: "idx_payroll_runs_spend_item_id")
+  @@index([created_by_user_id], map: "idx_payroll_runs_created_by_user_id")
+  @@map("payroll_runs")
+}
+
+model PayrollRunItem {
+  id                  String             @id @default(uuid()) @db.Uuid
+  payroll_run_id      String             @db.Uuid
+  employee_id         String             @db.Uuid
+  currency_id         String             @db.Uuid
+  gross_pay_minor     BigInt
+  deductions_minor    BigInt             @default(0)
+  net_pay_minor       BigInt
+  created_at          DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
+  payroll_run         PayrollRun         @relation(fields: [payroll_run_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee            Employee           @relation(fields: [employee_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currency            Currency           @relation(fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payroll_adjustments PayrollAdjustment[]
+
+  @@unique([payroll_run_id, employee_id], map: "uq_payroll_run_items_run_employee")
+  @@index([payroll_run_id], map: "idx_payroll_run_items_payroll_run_id")
+  @@index([employee_id], map: "idx_payroll_run_items_employee_id")
+  @@index([currency_id], map: "idx_payroll_run_items_currency_id")
+  @@map("payroll_run_items")
+}
+
+model PayrollAdjustment {
+  id                  String                @id @default(uuid()) @db.Uuid
+  payroll_run_id      String?               @db.Uuid
+  payroll_run_item_id String?               @db.Uuid
+  employee_id         String                @db.Uuid
+  currency_id         String                @db.Uuid
+  created_by_user_id  String?               @db.Uuid
+  adjustment_type     PayrollAdjustmentType
+  amount_minor        BigInt
+  reason              String                @db.Text
+  effective_at        DateTime              @default(now()) @db.Timestamptz(6)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @updatedAt @db.Timestamptz(6)
+  payroll_run         PayrollRun?           @relation(fields: [payroll_run_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  payroll_run_item    PayrollRunItem?       @relation(fields: [payroll_run_item_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  employee            Employee              @relation(fields: [employee_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currency            Currency              @relation(fields: [currency_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  created_by_user     User?                 @relation("payroll_adjustments_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([payroll_run_id], map: "idx_payroll_adjustments_payroll_run_id")
+  @@index([payroll_run_item_id], map: "idx_payroll_adjustments_payroll_run_item_id")
+  @@index([employee_id], map: "idx_payroll_adjustments_employee_id")
+  @@index([currency_id], map: "idx_payroll_adjustments_currency_id")
+  @@index([created_by_user_id], map: "idx_payroll_adjustments_created_by_user_id")
+  @@map("payroll_adjustments")
+}
+
+model ApprovalPolicy {
+  id                  String               @id @default(uuid()) @db.Uuid
+  code                String               @unique @db.VarChar(64)
+  name                String               @db.VarChar(255)
+  description         String?              @db.Text
+  scope               ApprovalPolicyScope
+  spend_item_type     SpendItemType?
+  base_currency_id    String?              @db.Uuid
+  department_id       String?              @db.Uuid
+  created_by_user_id  String?              @db.Uuid
+  is_active           Boolean              @default(true)
+  created_at          DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  base_currency       Currency?            @relation("approval_policies_base_currency", fields: [base_currency_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  department          Department?          @relation(fields: [department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  created_by_user     User?                @relation("approval_policies_created_by", fields: [created_by_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approval_policy_rules ApprovalPolicyRule[]
+  approval_instances  ApprovalInstance[]
+
+  @@index([spend_item_type], map: "idx_approval_policies_spend_item_type")
+  @@index([base_currency_id], map: "idx_approval_policies_base_currency_id")
+  @@index([department_id], map: "idx_approval_policies_department_id")
+  @@index([created_by_user_id], map: "idx_approval_policies_created_by_user_id")
+  @@map("approval_policies")
+}
+
+model ApprovalPolicyRule {
+  id                String         @id @default(uuid()) @db.Uuid
+  approval_policy_id String        @db.Uuid
+  step_order        Int
+  role_id           String?        @db.Uuid
+  user_id           String?        @db.Uuid
+  department_id     String?        @db.Uuid
+  min_amount_minor  BigInt?
+  max_amount_minor  BigInt?
+  steps_json        Json
+  requires_all      Boolean        @default(false)
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+  approval_policy   ApprovalPolicy @relation(fields: [approval_policy_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role              Role?          @relation(fields: [role_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  user              User?          @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  department        Department?    @relation(fields: [department_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([approval_policy_id, step_order], map: "uq_approval_policy_rules_policy_order")
+  @@index([approval_policy_id], map: "idx_approval_policy_rules_policy_id")
+  @@index([role_id], map: "idx_approval_policy_rules_role_id")
+  @@index([user_id], map: "idx_approval_policy_rules_user_id")
+  @@index([department_id], map: "idx_approval_policy_rules_department_id")
+  @@map("approval_policy_rules")
+}
+
+model ApprovalInstance {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  approval_policy_id String?                @db.Uuid
+  entity_type        ApprovalEntityType
+  entity_id          String                 @db.Uuid
+  status             ApprovalInstanceStatus @default(PENDING)
+  requested_by_user_id String               @db.Uuid
+  started_at         DateTime               @default(now()) @db.Timestamptz(6)
+  completed_at       DateTime?              @db.Timestamptz(6)
+  created_at         DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime               @default(now()) @updatedAt @db.Timestamptz(6)
+  approval_policy    ApprovalPolicy?        @relation(fields: [approval_policy_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  requested_by_user  User                   @relation("approval_instances_requested_by", fields: [requested_by_user_id], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approval_steps     ApprovalStep[]
+
+  @@index([approval_policy_id], map: "idx_approval_instances_policy_id")
+  @@index([requested_by_user_id], map: "idx_approval_instances_requested_by_user_id")
+  @@index([entity_type, entity_id], map: "idx_approval_instances_entity")
+  @@map("approval_instances")
+}
+
+model ApprovalStep {
+  id                   String             @id @default(uuid()) @db.Uuid
+  approval_instance_id String             @db.Uuid
+  step_order           Int
+  role_id              String?            @db.Uuid
+  assigned_user_id     String?            @db.Uuid
+  status               ApprovalStepStatus @default(PENDING)
+  acted_by_user_id     String?            @db.Uuid
+  acted_at             DateTime?          @db.Timestamptz(6)
+  comment              String?            @db.Text
+  created_at           DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
+  approval_instance    ApprovalInstance   @relation(fields: [approval_instance_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role                 Role?              @relation(fields: [role_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  assigned_user        User?              @relation("approval_steps_assigned_user", fields: [assigned_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  acted_by_user        User?              @relation("approval_steps_acted_by_user", fields: [acted_by_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([approval_instance_id, step_order], map: "uq_approval_steps_instance_order")
+  @@index([approval_instance_id], map: "idx_approval_steps_instance_id")
+  @@index([role_id], map: "idx_approval_steps_role_id")
+  @@index([assigned_user_id], map: "idx_approval_steps_assigned_user_id")
+  @@index([acted_by_user_id], map: "idx_approval_steps_acted_by_user_id")
+  @@map("approval_steps")
+}
+
+model AuditEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  actor_user_id String?   @db.Uuid
+  event_type    String    @db.VarChar(128)
+  entity_type   String    @db.VarChar(128)
+  entity_id     String    @db.Uuid
+  payload       Json?
+  occurred_at   DateTime  @default(now()) @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime  @default(now()) @db.Timestamptz(6)
+  actor_user    User?     @relation("audit_events_actor_user", fields: [actor_user_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([actor_user_id], map: "idx_audit_events_actor_user_id")
+  @@index([entity_type, entity_id], map: "idx_audit_events_entity")
+  @@map("audit_events")
+}

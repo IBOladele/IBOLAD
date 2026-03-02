@@ -1,0 +1,10 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "yarn install --frozen-lockfile && yarn workspace @repo/shared build && yarn workspace @repo/api prisma:generate && yarn workspace @repo/api prisma:migrate:deploy && yarn workspace @repo/api build"
+
+[deploy]
+startCommand = "npm run start --workspace @repo/api"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

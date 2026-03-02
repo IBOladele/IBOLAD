@@ -1,0 +1,27 @@
+{
+  "name": "@repo/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "eslint --max-warnings=0 \"src/**/*.ts\"",
+    "lint:fix": "eslint --fix \"src/**/*.ts\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2"
+  }
+}
